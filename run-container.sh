@@ -4,7 +4,7 @@ thisdir=$(dirname $(realpath $0))
 cd "$thisdir"
 
 verbose_flag=''
-cluster_kubeconfig=''
+cluster_kubeconfig='~/.kube/config'
 extra=()
 playbooks=()
 inventory=''
