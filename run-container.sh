@@ -1,7 +1,6 @@
 #!/bin/bash
 
-thisdir=$(dirname $(realpath $0))
-cd "$thisdir"
+cd $(dirname $(realpath $0))
 
 verbose_flag=''
 cluster_kubeconfig='~/.kube/config'
@@ -83,14 +82,18 @@ EOF
     shift
 done
 
+# You have to specify a cluster name, either via export or arg
 if [ -z "$DEVSECOPS_CLUSTER" ]; then
     echo -e "Error: You must specify a cluster.\n$usage" >&2
+    exit 2
 elif [ ! -d "vars/$DEVSECOPS_CLUSTER" ]; then
-    echo -e "Error: You must create a subdirectory in $(pwd)/vars named $cluster with common.yml, devsecops.yml, and provision.yml in it to pass into the container.\n$usage" >&2
+    echo -e "Error: You must create a subdirectory in $PWD/vars named $cluster with common.yml, devsecops.yml, and provision.yml in it (as needed by your playbooks) to pass into the container.\n$usage" >&2
+    exit 3
 fi
 
 args="$verbose_flag"
 
+# Find a playbook if you didn't specify one
 if [ -z "${playbooks[*]}" ]; then
     if [ $(ls playbooks/ | wc -l) -eq 1 ]; then
         playbooks=("playbooks/$(ls playbooks/)")
@@ -108,6 +111,7 @@ if [ -z "${playbooks[*]}" ]; then
     fi
 fi
 
+# Identify our container runtime and differences in arguments between them
 if which podman &>/dev/null; then
     runtime=podman
     run_args="-v ./tmp:/app/tmp:shared -v ./vars/$DEVSECOPS_CLUSTER:/app/vars:shared,ro --label=disable"
@@ -120,7 +124,9 @@ else
     exit 1
 fi
 
+# Some operations need AWS environment variables specified.
 if echo "${playbooks[*]}" | grep -qF provision || echo "${playbooks[*]}" | grep -qF destroy; then
+    # If they're not exported, we'll ask for them.
     if [ -z "$AWS_ACCESS_KEY_ID" ]; then
         read -p "Enter your AWS_ACCESS_KEY_ID: " AWS_ACCESS_KEY_ID
     fi
@@ -129,17 +135,57 @@ if echo "${playbooks[*]}" | grep -qF provision || echo "${playbooks[*]}" | grep 
     fi
 fi
 
+# This builds the container image with the current codebase but no bind mounts
 $runtime build . -t devsecops-$DEVSECOPS_CLUSTER
 
+# Now it's time to figure out things about your bind mounts
+cluster_name=$(awk '/^cluster_name:/{print $2}' vars/$DEVSECOPS_CLUSTER/common.yml)
+openshift_base_domain=$(awk '/^openshift_base_domain:/{print $2}' vars/$DEVSECOPS_CLUSTER/common.yml)
+full_cluster_name="$cluster_name.$openshift_base_domain"
+mkdir -p tmp/$full_cluster_name/auth
+
+# Try to fix a borked kubeconfig for container runs
+sed -i 's/^kubeconfig:.*$/kubeconfig: '"'"'\{\{ tmp_dir \}\}\/auth\/kubeconfig'"'" vars/$DEVSECOPS_CLUSTER/common.yml &>/dev/null ||:
+# Try to fix a borked oc_cli for container runs
+sed -i 's/^oc_cli:.*$/oc_cli: '"'"'\/usr\/local\/bin\/oc'"'" vars/$DEVSECOPS_CLUSTER/common.yml &>/dev/null ||:
+
 if [ "$cluster_kubeconfig" ]; then
-    cluster_name=$(awk '/^cluster_name:/{print $2}' vars/$DEVSECOPS_CLUSTER/common.yml)
-    openshift_base_domain=$(awk '/^openshift_base_domain:/{print $2}' vars/$DEVSECOPS_CLUSTER/common.yml)
-    mkdir -p tmp/$cluster_name.$openshift_base_domain/auth
-    cp "$cluster_kubeconfig" "tmp/$cluster_name.$openshift_base_domain/auth/kubeconfig"
+    # If you specified a kubeconfig to use, just wholesale bring it over
+    cp "$cluster_kubeconfig" "tmp/$full_cluster_name/auth/kubeconfig"
+elif [ -r "tmp/$full_cluster_name/auth/kubeconfig" ]; then
+    # Everything is wonderful now (maybe)
+    echo >/dev/null
+elif echo "${playbooks[*]}" | grep -qF provision; then
+    # We'll make our own kubeconfig
+    echo >/dev/null
+elif [ -r ~/.kube/config ]; then
+    echo "[WARN] No KUBECONFIG specified, not provisioning cluster. Grabbing default from $(realpath ~/.kube/config)." >&2
+    cp "$(realpath ~/.kube/config)" "tmp/$full_cluster_name/auth/kubeconfig"
+else
+    echo -e "No KUBECONFIG specified, none in default location. Cowardly aborting.\n$usage" >&2
+    exit 4
 fi
 
+# Serially iterate over every playbook specified
 for playbook in "${playbooks[@]}"; do
-    $runtime run  -it --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
+    # `-it`
+    # We also want to guarantee a TTY for possible prompts
+    # `--rm`
+    # We want the containers themselves to remain ephemeral
+    # `-e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY`
+    # We can just export AWS variables directly, it won't hurt
+    # `--privileged`
+    # We're just using the container for runtime environment, not privilege
+    #   seperation, so give it all we've got
+    # `${run_args}`
+    # These are inherited above to account for the differences between docker
+    #   and podman, specifically around how they handle SELinux (if present)
+    #   and bind mounts.
+    # `devsecops-$DEVSECOPS_CLUSTER`
+    # This is the name of the container image we built above
+    # <everything else>
+    # These are passed as args to ansible-playbook inside the container.
+    $runtime run -it --rm -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY \
         --privileged ${run_args} devsecops-$DEVSECOPS_CLUSTER \
         ${args} "${extra[@]}" "$playbook" || exit $?
 done
