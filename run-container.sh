@@ -3,7 +3,7 @@
 cd $(dirname $(realpath $0))
 
 verbose_flag=''
-cluster_kubeconfig=~/.kube/config
+cluster_kubeconfig=''
 extra=()
 playbooks=()
 inventory=''
