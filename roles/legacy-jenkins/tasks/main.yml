@@ -1,0 +1,8 @@
+---
+
+- include_tasks: jenkins_task.yml
+  vars:
+    infra_project_name: '{{ projects|json_query("[?type == `infra`].name")|first }}'
+  loop: '{{ workshop_users }}'
+  loop_control:
+    loop_var: user

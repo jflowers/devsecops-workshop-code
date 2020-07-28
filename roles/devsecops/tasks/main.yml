@@ -42,6 +42,11 @@
     - deploy_pipeline
     - pipeline_style == 'jenkins'
 - include_role:
+    name: legacy-jenkins
+  when:
+    - deploy_pipeline
+    - pipeline_style == 'legacy-jenkins'
+- include_role:
     name: workshop-spawner
   when: deploy_workshop
 - include_role:
