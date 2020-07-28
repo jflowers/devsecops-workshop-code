@@ -16,16 +16,26 @@ devsecops_included: yes
 #   (and can be used in the future if the service account isn't deleted)
 reg_rhio_pull_token : <registry.redhat.io service account token>
 
+################################################################################
+# DO NOT CHANGE OR COMMENT THESE FOR ANY REASON
+project_types:
+  - infra
+  - dev
+  - test
+################################################################################
 
 # The projects to create per-user, with names including the username (e.g. user1-dev)
 projects:
   - name: dev
+    type: dev
     disp: Tasks - Dev
     env: dev
   - name: stage
+    type: test
     disp: Tasks - Stage
     env: stage
   - name: cicd
+    type: infra
     disp: CI/CD
 
 
@@ -35,9 +45,17 @@ github_project: jharmison-redhat
 #   operator coming from this repo won't affect the images themselves.
 
 
-# Uncomment the following to change the pipeline workflow from Tekton to Jenkins
+# Uncomment the following to change the pipeline workflow from tekton, jenkins, or legacy-jenkins
 # NOTE: Not really implemented yet....
 # pipeline_style: jenkins
+
+# Options for repos to migrate from github
+# tasks_github_project: jflowers   # github organization/owner
+# repos_to_load:                   # list of repo names
+#   - spring-petclinic
+
+# Options for pipeline_style legacy-jenkins
+# legacy_jenkins_pipeline_repo: spring-petclinic    # what repo should a multibranch pipeline be create for
 
 # Uncomment the following to change the actions that occur before workshop deployment
 # create_users: no      # You should only do this if you're not trying to deploy much of anything

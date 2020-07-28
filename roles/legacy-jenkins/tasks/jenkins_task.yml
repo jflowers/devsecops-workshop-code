@@ -1,7 +1,4 @@
 ---
-- name: print vars
-  debug:
-    msg: "{{ user.username }}-{{ infra_project_name }}"
 
 - name: Create a Jenkins instance for each user
   k8s:
@@ -9,40 +6,40 @@
     namespace: '{{ user.username }}-{{ infra_project_name }}'
     definition: '{{ lookup("template", "jenkins.yml.j2")|from_yaml }}'
 
-- name: Wait for Jenkins to be ready
-  k8s_info:
-    kubeconfig: '{{ kubeconfig }}'
-    api_version: apps.openshift.io/v1
-    kind: DeploymentConfig
-    namespace: '{{ user.username }}-{{ infra_project_name }}'
-    name: jenkins
-  register: jenkins_deployment
-  until: not jenkins_deployment.failed
-  retries: 5
-  delay: 10
+# - name: Wait for Jenkins to be ready
+#   k8s_info:
+#     kubeconfig: '{{ kubeconfig }}'
+#     api_version: apps.openshift.io/v1
+#     kind: DeploymentConfig
+#     namespace: '{{ user.username }}-{{ infra_project_name }}'
+#     name: jenkins
+#   register: jenkins_deployment
+#   until: not jenkins_deployment.failed
+#   retries: 5
+#   delay: 10
 
 - name: Create Jenkins secret for all users  
   k8s:
     kubeconfig: '{{ kubeconfig }}'
     definition: '{{ lookup("template", "jenkins-secret.yml.j2")|from_yaml }}'
 
-- name: Get Route for Jenkins
-  k8s_info:
-    kubeconfig: '{{ kubeconfig }}'
-    api_version: route.openshift.io/v1
-    kind: Route
-    namespace: '{{ user.username }}-{{ infra_project_name }}'
-    name: jenkins
-  register: jenkins_route
+# - name: Get Route for Jenkins
+#   k8s_info:
+#     kubeconfig: '{{ kubeconfig }}'
+#     api_version: route.openshift.io/v1
+#     kind: Route
+#     namespace: '{{ user.username }}-{{ infra_project_name }}'
+#     name: jenkins
+#   register: jenkins_route
 
-- name: Wait for the Jenkins to begin answering requests
-  uri:
-    url: https://{{ jenkins_route.resources[0].spec.host }}
-    status_code: 403
-  register: jenkins_available
-  until: jenkins_available.status != 503
-  retries: 50
-  delay: 30
+# - name: Wait for the Jenkins to begin answering requests
+#   uri:
+#     url: https://{{ jenkins_route.resources[0].spec.host }}
+#     status_code: 403
+#   register: jenkins_available
+#   until: jenkins_available.status != 503
+#   retries: 50
+#   delay: 30
 
 # - name: Create pipeline for all users
 #   jenkins_job:
@@ -50,4 +47,4 @@
 #     config: '{{ lookup("template", "jenkins-job.xml.j2") }}'
 #     user: '{{ user.username }}'
 #     password: '{{ user.password }}'
-#     url: '{{ jenkins_route.resources[0].spec.host }}'
+#     url: https://{{ jenkins_route.resources[0].spec.host }}
