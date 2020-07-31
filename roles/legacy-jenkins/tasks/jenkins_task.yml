@@ -10,3 +10,6 @@
   k8s:
     kubeconfig: '{{ kubeconfig }}'
     definition: '{{ lookup("template", "jenkins-secret.yml.j2")|from_yaml }}'
+
+# Add web hook to gitea
+# https://mike42.me/blog/2019-05-how-to-integrate-gitea-and-jenkins
