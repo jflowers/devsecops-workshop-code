@@ -253,6 +253,15 @@ items:
     namespace: {{ user.username }}-{{ infra_project_name }}
   data:
     jenkins.yaml: |-
+      credentials:
+        system:
+          domainCredentials:
+          - credentials:
+            - usernamePassword:
+                id: "gitea"
+                password: "{AQAAABAAAAAQCTAJw6gQKMTSG/dqeS3r/ZK/XzssdGjuw9+GtzCTSOI=}"
+                scope: GLOBAL
+                username: "{{ user.username }}"
       unclassified:
         giteaServers:
           servers:
@@ -311,7 +320,7 @@ items:
 
         def navigator = (new GiteaSCMNavigator.DescriptorImpl()).newInstance(repoOwner)
         
-        navigator.credentialsId = ''
+        navigator.credentialsId = 'gitea'
 
         folder.navigators.replace(navigator)
 
@@ -341,5 +350,20 @@ items:
           folder.scheduleBuild()
         }
       }
+
+      def scriptApproval = org.jenkinsci.plugins.scriptsecurity.scripts.ScriptApproval.get()
+
+      String[] signs = [
+        "method hudson.model.Run getLogFile",
+        "method org.jvnet.hudson.plugins.groovypostbuild.GroovyPostbuildRecorder$BadgeManager createSummary java.lang.String",
+        "method org.jvnet.hudson.plugins.groovypostbuild.GroovyPostbuildRecorder$BadgeManager getBuild",
+        "staticMethod org.codehaus.groovy.runtime.DefaultGroovyMethods readLines java.io.File"
+      ]
+
+      for( String sign : signs ) {
+        scriptApproval.approveSignature(sign)
+      }
+
+      scriptApproval.save()
 kind: List
 metadata: {}
