@@ -1,27 +1,10 @@
 ---
-- name: Configure self signed certificate setting
+- name: Determine if we should do quay certs
   set_fact:
-    use_real_certs: "{{ (AWS_ACCESS_KEY_ID is defined or ansible_env['AWS_ACCESS_KEY_ID'] is defined) | bool }}"
+    do_quay_certs: (letsencrypt|bool and (AWS_ACCESS_KEY_ID is defined or ansible_env["AWS_ACCESS_KEY_ID"] is defined) and (AWS_ACCESS_KEY_ID|default("") != "" or ansible_env["AWS_ACCESS_KEY_ID"]|default("") != ""))|bool
 
-- name: Download acme.sh
-  git:
-    repo: https://github.com/neilpang/acme.sh
-    dest: '{{ _tmp_parent }}/acme.sh'
-
-- name: Ensure certificate directory exists
-  file:
-    path: '{{ certificate_path }}'
-    state: directory
-
-- name: Get necessary certs
-  shell: '{{ lookup("template", "quay_certs.sh.j2") }}'
-  args:
-    creates: '{{ certificate_path }}/quay-fullchain.pem'
-  environment:
-    AWS_ACCESS_KEY_ID: '{{ AWS_ACCESS_KEY_ID|default(ansible_env["AWS_ACCESS_KEY_ID"]) }}'
-    AWS_SECRET_ACCESS_KEY: '{{ AWS_SECRET_ACCESS_KEY|default(ansible_env["AWS_SECRET_ACCESS_KEY"]) }}'
-  when:
-  - use_real_certs
+- include_tasks: certificates.yml
+  when: '{{ do_quay_certs }}'
 
 - name: Subscribe to Quay Enterprise
   k8s:
@@ -71,10 +54,10 @@
         name: container-security-operator
         namespace: openshift-operators
       spec:
-        channel: alpha
+        channel: quay-v3.3
         installPlanApproval: Automatic
         name: container-security-operator
-        source: community-operators
+        source: redhat-operators
         sourceNamespace: openshift-marketplace
 
 # Disabled for now until Quay API becomes more useful for automating Bridge
